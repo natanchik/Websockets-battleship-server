@@ -1,4 +1,4 @@
-export const regResponse = (name, index, err) => {
+export const reg = (name, index, err) => {
   return JSON.stringify({
     type: 'reg',
     data: JSON.stringify({
@@ -11,7 +11,7 @@ export const regResponse = (name, index, err) => {
   });
 };
 
-export const getWinners = (winners) => {
+export const updateWinners = (winners) => {
   return JSON.stringify({
     type: 'update_winners',
     data: JSON.stringify(winners),
@@ -27,7 +27,7 @@ export const updateRoom = (rooms) => {
   });
 };
 
-export const createGameRes = (idGame, idPlayer) => {
+export const createGame = (idGame, idPlayer) => {
   return JSON.stringify({
     type: 'create_game', //send for both players in the room
     data: JSON.stringify({
@@ -38,7 +38,7 @@ export const createGameRes = (idGame, idPlayer) => {
   });
 };
 
-export const startGameRes = (ships, currentPlayerIndex) => {
+export const startGame = (ships, currentPlayerIndex) => {
   return JSON.stringify({
     type: 'start_game',
     data: {
@@ -47,4 +47,34 @@ export const startGameRes = (ships, currentPlayerIndex) => {
     },
     id: 0,
   });
+};
+
+export const attack = (position, currentPlayer, status) => {
+  return {
+    type: 'attack',
+    data: JSON.stringify({
+      position, //: { x: <number>, y: <number> },
+      currentPlayer, //: <number>, id of the player in the current game session
+      status, //: "miss"|"killed"|"shot",
+    }),
+    id: 0,
+  };
+};
+
+export const turn = (currentPlayer) => {
+  return {
+    type: 'turn',
+    data: { currentPlayer }, //: <number>, /* id of the player in the current game session */
+    id: 0,
+  };
+};
+
+export const finish = (winPlayer) => {
+  return {
+    type: 'finish',
+    data: {
+      winPlayer, // : <number>, /* id of the player in the current game session */
+    },
+    id: 0,
+  };
 };

@@ -1,7 +1,7 @@
 import { httpServer } from './src/http_server/index.js';
 import { WebSocketServer } from 'ws';
 import createMatrix from './src/wss/createMatrix.js';
-import { regResponse, getWinners, updateRoom, createGameRes, startGameRes } from './src/wss/responses.js';
+import { reg, updateWinners, updateRoom, createGame, startGame, attack, turn, finish } from './src/wss/responses.js';
 
 const HTTP_PORT = 8181;
 console.log(`Start static http server on the ${HTTP_PORT} port!`);
@@ -30,7 +30,7 @@ wss.on('connection', function connection(ws) {
         name = message.data.name;
         let response;
         if (Object.keys(users).includes(name)) {
-          response = regResponse(
+          response = reg(
             name,
             users.name.index,
             users.name.password === message.data.password ? null : Error('Invalid login or password'),
@@ -38,12 +38,12 @@ wss.on('connection', function connection(ws) {
         } else {
           wsId = Math.random();
           users.name = { index: wsId, password: message.data.password };
-          response = regResponse(name, wsId);
+          response = reg(name, wsId);
         }
         for (let client of wss.clients) {
           client.send(response);
           client.send(updateRoom(rooms));
-          client.send(getWinners(winners));
+          client.send(updateWinners(winners));
         }
         break;
       case 'create_room':
@@ -61,7 +61,7 @@ wss.on('connection', function connection(ws) {
         for (let client of wss.clients) {
           client.send(updateRoom(rooms));
         }
-        ws.send(createGameRes(message.data.indexRoom, wsId));
+        ws.send(createGame(message.data.indexRoom, wsId));
         break;
       case 'add_ships':
         message.data = JSON.parse(message.data);
@@ -72,12 +72,10 @@ wss.on('connection', function connection(ws) {
         };
         if (Object.keys(games[message.data.gameId]).length === 2) {
           // console.log('wss clients', wss.clients);
-          ws.send(startGameRes(message.data.ships, wsId));
-          console.log('start game', startGameRes(message.data.ships, wsId));
+          ws.send(startGame(message.data.ships, wsId));
+          console.log('start game', startGame(message.data.ships, wsId));
         }
         break;
-      case 'default':
-        console.log('мимо');
     }
   });
 
