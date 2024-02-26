@@ -50,7 +50,7 @@ export const startGame = (ships, currentPlayerIndex) => {
 };
 
 export const attack = (position, currentPlayer, status) => {
-  return {
+  return JSON.stringify({
     type: 'attack',
     data: JSON.stringify({
       position, //: { x: <number>, y: <number> },
@@ -58,23 +58,21 @@ export const attack = (position, currentPlayer, status) => {
       status, //: "miss"|"killed"|"shot",
     }),
     id: 0,
-  };
+  });
 };
 
 export const turn = (currentPlayer) => {
-  return {
+  return JSON.stringify({
     type: 'turn',
-    data: { currentPlayer }, //: <number>, /* id of the player in the current game session */
+    data: JSON.stringify({ currentPlayer }), //: <number>, /* id of the player in the current game session */
     id: 0,
-  };
+  });
 };
 
 export const finish = (winPlayer) => {
-  return {
+  return JSON.stringify({
     type: 'finish',
-    data: {
-      winPlayer, // : <number>, /* id of the player in the current game session */
-    },
+    data: JSON.stringify({ winPlayer }), // : <number>, id of the player in the current game session
     id: 0,
-  };
+  });
 };

@@ -2,6 +2,7 @@ import { httpServer } from './src/http_server/index.js';
 import { WebSocketServer } from 'ws';
 import createMatrix from './src/wss/createMatrix.js';
 import { reg, updateWinners, updateRoom, createGame, startGame, attack, turn, finish } from './src/wss/responses.js';
+import takeTurn from './src/wss/takeTurn.js';
 
 const HTTP_PORT = 8181;
 console.log(`Start static http server on the ${HTTP_PORT} port!`);
@@ -22,26 +23,26 @@ wss.on('connection', function connection(ws) {
 
   ws.on('message', function (message) {
     message = JSON.parse(message.toString('utf8'));
-    console.log('onMessage', message);
+    let data;
 
     switch (message.type) {
       case 'reg':
-        message.data = JSON.parse(message.data);
-        name = message.data.name;
+        data = JSON.parse(message.data);
+        name = data.name;
         let response;
         if (Object.keys(users).includes(name)) {
           response = reg(
             name,
             users.name.index,
-            users.name.password === message.data.password ? null : Error('Invalid login or password'),
+            users.name.password === data.password ? null : Error('Invalid login or password'),
           );
         } else {
           wsId = Math.random();
-          users.name = { index: wsId, password: message.data.password };
+          users.name = { index: wsId, password: data.password };
           response = reg(name, wsId);
         }
+        ws.send(response);
         for (let client of wss.clients) {
-          client.send(response);
           client.send(updateRoom(rooms));
           client.send(updateWinners(winners));
         }
@@ -55,25 +56,36 @@ wss.on('connection', function connection(ws) {
         }
         break;
       case 'add_user_to_room':
-        message.data = JSON.parse(message.data);
-        const room = rooms.filter((room) => room.roomId === message.data.indexRoom);
+        data = JSON.parse(message.data);
+        const room = rooms.filter((room) => room.roomId === data.indexRoom);
         room[0].roomUsers.push({ name, index: wsId });
         for (let client of wss.clients) {
           client.send(updateRoom(rooms));
         }
-        ws.send(createGame(message.data.indexRoom, wsId));
+        ws.send(createGame(data.indexRoom, wsId));
         break;
       case 'add_ships':
-        message.data = JSON.parse(message.data);
-        games[message.data.gameId][message.data.indexPlayer] = {
-          matrix: createMatrix(message.data.ships),
-          startPosition: message.data.ships,
+        data = JSON.parse(message.data);
+        games[data.gameId][data.indexPlayer] = {
+          matrix: createMatrix(data.ships),
+          startPosition: data.ships,
           shipsAmount: 10,
         };
-        if (Object.keys(games[message.data.gameId]).length === 2) {
-          // console.log('wss clients', wss.clients);
-          ws.send(startGame(message.data.ships, wsId));
-          console.log('start game', startGame(message.data.ships, wsId));
+        // if (Object.keys(games[message.data.gameId]).length === 2) {
+        ws.send(startGame(data.ships, wsId));
+        ws.send(turn(+Object.keys(games[data.gameId])[0]));
+        // }
+        break;
+      case 'attack':
+        data = JSON.parse(message.data);
+        const enemyIndex = Object.keys(games[data.gameId]).filter((el) => el != data.indexPlayer)[0];
+        const status = takeTurn(games[data.gameId][enemyIndex].matrix, data.x, data.y);
+        if (status === 'killed') {
+          games[data.gameId][data.indexPlayer].shipsAmount--;
+        }
+        for (let client of wss.clients) {
+          client.send(attack({ x: data.x, y: data.y }, data.indexPlayer, status));
+          client.send(turn(enemyIndex));
         }
         break;
     }
