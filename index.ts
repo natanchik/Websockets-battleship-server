@@ -15,6 +15,7 @@ const users: { [name: string]: User } = {};
 const rooms: Room[] = [];
 const winners: Winner[] = [];
 const games: { [idGame: string]: { [idPlayer: string]: GamePlayer } } = {};
+const turns: { [idGame: number]: number } = {};
 
 wss.on('connection', function connection(ws) {
   let wsId: number | null = null;
@@ -66,6 +67,9 @@ wss.on('connection', function connection(ws) {
           for (let client of wss.clients) {
             client.send(updateRoom(rooms));
           }
+          if (turns[data.indexRoom] === undefined) {
+            turns[data.indexRoom] = wsId;
+          }
           ws.send(createGame(data.indexRoom, wsId));
         } else {
           console.error('wsId is null when adding user to room');
@@ -83,18 +87,25 @@ wss.on('connection', function connection(ws) {
           console.error('wsId is null when starting game');
         }
         // if (Object.keys(games[parsedMessage.data.gameId]).length === 2) {
-        ws.send(turn(+Object.keys(games[data.gameId])[0]));
+        ws.send(turn(turns[data.indexRoom]));
         // }
         break;
       case 'attack':
         const enemyIndex = Object.keys(games[data.gameId]).filter((el) => el != data.indexPlayer)[0];
-        const status = takeTurn(games[data.gameId][enemyIndex].matrix, data.x, data.y);
-        if (status === 'killed') {
-          games[data.gameId][data.indexPlayer].shipsAmount--;
+        if (turns[data.gameId] === data.indexPlayer) {
+          const status = takeTurn(games[data.gameId][enemyIndex].matrix, data.x, data.y);
+          if (status === 'miss') {
+            turns[data.gameId] = +enemyIndex;
+          }
+          if (status === 'killed') {
+            games[data.gameId][data.indexPlayer].shipsAmount--;
+          }
+          for (let client of wss.clients) {
+            client.send(attack({ x: data.x, y: data.y }, data.indexPlayer, status));
+          }
         }
         for (let client of wss.clients) {
-          client.send(attack({ x: data.x, y: data.y }, data.indexPlayer, status));
-          client.send(turn(+enemyIndex));
+          client.send(turn(turns[data.indexRoom]));
         }
         break;
     }
