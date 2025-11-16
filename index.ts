@@ -166,11 +166,12 @@ wss.on('connection', function connection(ws) {
           shipsKilled: 0,
         };
 
-        // Determine how many players (or bot+player) are ready in this game
+        // Get the room for this game
+        const room = rooms.find((r) => r.roomId === data.gameId);
         const readyPlayers = Object.keys(games[data.gameId] || {}).length;
 
-        // Start the game only when two players (or player+bot) are present
-        if (readyPlayers === 2) {
+        // Start the game only when two players (or player+bot) are present and room has 2 users
+        if (readyPlayers === 2 && room && room.roomUsers.length === 2) {
           try {
             // send each player's start_game (broadcast so each client can pick its own by index)
             for (let playerIndex of Object.keys(games[data.gameId])) {
@@ -212,12 +213,9 @@ wss.on('connection', function connection(ws) {
             console.error('Error while trying to trigger bot move', e);
           }
         } else {
-          // Not all players ready yet — inform the submitting client that ships were received
-          if (wsId !== null) {
-            ws.send(startGame(data.ships, wsId as number));
-          } else {
-            console.error('wsId is null when starting game');
-          }
+          // Not all players ready yet — don't send startGame to avoid prematurely starting the game
+          // The game will only start when both players have sent their ships
+          console.log('Waiting for second player to add ships...');
         }
         break;
       }
