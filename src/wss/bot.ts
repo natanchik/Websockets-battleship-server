@@ -7,20 +7,40 @@ function randInt(min: number, max: number) {
 }
 
 function canPlace(ships: Ship[], x: number, y: number, len: number, dir: boolean) {
+  // Check if ship placement is within bounds
+  const endX = dir ? x : x + len - 1;
+  const endY = dir ? y + len - 1 : y;
+  if (x < 0 || endX > 9 || y < 0 || endY > 9) return false;
+
+  // Get all cells around the ship to check (ship + 1 cell buffer in all directions)
+  const cellsToCheck = new Set<string>();
   for (let i = 0; i < len; i++) {
     const px = dir ? x : x + i;
     const py = dir ? y + i : y;
-    if (px < 0 || px > 9 || py < 0 || py > 9) return false;
-    for (let s of ships) {
-      const sx = s.position.x;
-      const sy = s.position.y;
-      const sl = s.length;
-      const sdir = s.direction;
-      for (let j = 0; j < sl; j++) {
-        const spx = sdir ? sx : sx + j;
-        const spy = sdir ? sy + j : sy;
-        if (spx === px && spy === py) return false;
+    cellsToCheck.add(`${px},${py}`);
+  }
+
+  // Add buffer cells (1 cell around the ship)
+  for (let i = -1; i <= len; i++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const px = dir ? x + dx : x + i;
+      const py = dir ? y + i : y + dx;
+      if (px >= 0 && px <= 9 && py >= 0 && py <= 9) {
+        cellsToCheck.add(`${px},${py}`);
       }
+    }
+  }
+
+  // Check if any existing ship occupies or touches these cells
+  for (let s of ships) {
+    const sx = s.position.x;
+    const sy = s.position.y;
+    const sl = s.length;
+    const sdir = s.direction;
+    for (let j = 0; j < sl; j++) {
+      const spx = sdir ? sx : sx + j;
+      const spy = sdir ? sy + j : sy;
+      if (cellsToCheck.has(`${spx},${spy}`)) return false;
     }
   }
   return true;
