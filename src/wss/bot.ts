@@ -65,6 +65,9 @@ export function botMakeMove(
   responses: any,
   turns: { [idGame: string]: number },
 ) {
+  // Check if game still exists
+  if (!games[gameId]) return;
+
   const opponentIndex = Object.keys(games[gameId]).filter((el) => el != botIndex)[0];
   if (!opponentIndex) return;
 
@@ -82,15 +85,14 @@ export function botMakeMove(
 
   const status = takeTurn(opponentMatrix, x, y);
 
+  // Change turn only on miss
   if (status === 'miss') {
-    // ensure we use string keys for the turns map
-    turns[String(gameId)] = +opponentIndex;
+    turns[gameId] = +opponentIndex;
   }
+
+  // Increment killed ships counter when ship is killed
   if (status === 'killed') {
-    // decrement opponent ship count (enemy lost a ship)
-    if (games[gameId][opponentIndex] && typeof games[gameId][opponentIndex].shipsAmount === 'number') {
-      games[gameId][opponentIndex].shipsAmount--;
-    }
+    games[gameId][opponentIndex].shipsKilled++;
   }
 
   // broadcast attack
@@ -98,13 +100,26 @@ export function botMakeMove(
     client.send(responses.attack({ x, y }, botIndex, status));
   }
 
-  // send turn info
-  for (let client of wss.clients) {
-    client.send(responses.turn(turns[String(gameId)]));
+  // Check if game is finished (opponent has all ships killed)
+  if (games[gameId][opponentIndex].shipsKilled === games[gameId][opponentIndex].shipsAmount) {
+    // Bot wins
+    for (let client of wss.clients) {
+      client.send(responses.finish(botIndex));
+      client.send(responses.updateWinners([{ name: 'Bot', wins: 1 }]));
+    }
+    // Clean up game
+    delete games[gameId];
+    delete turns[gameId];
+    return;
   }
 
-  // if killed, bot should attack again (simple immediate recursion)
-  if (status === 'killed') {
+  // send turn info
+  for (let client of wss.clients) {
+    client.send(responses.turn(turns[gameId]));
+  }
+
+  // if hit (killed or shot), bot should attack again
+  if (status === 'killed' || status === 'shot') {
     // small timeout to avoid blocking
     setTimeout(() => botMakeMove(gameId, botIndex, games, wss, responses, turns), 200);
   }
@@ -119,7 +134,8 @@ export function prepareBotForGame(games: any, gameId: string | number, botId?: s
   games[gameId][botIndex] = {
     matrix: createMatrix(ships),
     startPosition: ships,
-    shipsAmount: 10,
+    shipsAmount: ships.length,
+    shipsKilled: 0,
   };
   return { botIndex, ships };
 }

@@ -28,7 +28,8 @@ export interface Ship {
 export interface GamePlayer {
   matrix: number[][];
   startPosition: Ship[];
-  shipsAmount: number;
+  shipsAmount: number; // total number of ships
+  shipsKilled: number; // number of ships killed
 }
 
 export interface Games {

@@ -100,7 +100,8 @@ wss.on('connection', function connection(ws) {
           games[newRoomId][humanId] = {
             matrix: createMatrix(playerShips),
             startPosition: playerShips,
-            shipsAmount: 10,
+            shipsAmount: playerShips.length,
+            shipsKilled: 0,
           };
           // notify player that game started (with their ships)
           ws.send(startGame(playerShips, humanId));
@@ -161,7 +162,8 @@ wss.on('connection', function connection(ws) {
         games[data.gameId][data.indexPlayer] = {
           matrix: createMatrix(data.ships),
           startPosition: data.ships,
-          shipsAmount: 10,
+          shipsAmount: data.ships.length,
+          shipsKilled: 0,
         };
 
         // Determine how many players (or bot+player) are ready in this game
@@ -221,21 +223,62 @@ wss.on('connection', function connection(ws) {
       }
 
       case 'attack': {
-        const enemyIndex = Object.keys(games[data.gameId]).filter((el) => el != data.indexPlayer)[0];
-        if (turns[data.gameId] === data.indexPlayer) {
-          const status = takeTurn(games[data.gameId][enemyIndex].matrix, data.x, data.y);
-          if (status === 'miss') {
-            turns[data.gameId] = +enemyIndex;
-          }
-          if (status === 'killed') {
-            games[data.gameId][data.indexPlayer].shipsAmount--;
-          }
-          for (let client of wss.clients) {
-            client.send(attack({ x: data.x, y: data.y }, data.indexPlayer, status));
-          }
+        // Check if game exists and it's the player's turn
+        if (!games[data.gameId] || turns[data.gameId] !== data.indexPlayer) {
+          console.error("Invalid attack: game not found or not player's turn");
+          break;
         }
 
-        // broadcast whose turn it is (use gameId)
+        const enemyIndex = Object.keys(games[data.gameId]).filter((el) => el != data.indexPlayer)[0];
+        const status = takeTurn(games[data.gameId][enemyIndex].matrix, data.x, data.y);
+
+        // Change turn only on miss
+        if (status === 'miss') {
+          turns[data.gameId] = +enemyIndex;
+        }
+
+        // Increment killed ships counter when ship is killed
+        if (status === 'killed') {
+          games[data.gameId][enemyIndex].shipsKilled++;
+        }
+
+        // Broadcast the attack to all clients
+        for (let client of wss.clients) {
+          client.send(attack({ x: data.x, y: data.y }, data.indexPlayer, status));
+        }
+
+        // Check if game is finished (enemy has all ships killed)
+        if (games[data.gameId][enemyIndex].shipsKilled === games[data.gameId][enemyIndex].shipsAmount) {
+          // Current player wins - find player name from users
+          let winnerName = '';
+          for (const [userName, userInfo] of Object.entries(users)) {
+            if (userInfo.index === data.indexPlayer) {
+              winnerName = userName;
+              break;
+            }
+          }
+
+          if (winnerName) {
+            // Find or create winner entry
+            const existingWinner = winners.find((w) => w.name === winnerName);
+            if (existingWinner) {
+              existingWinner.wins++;
+            } else {
+              winners.push({ name: winnerName, wins: 1 });
+            }
+            // Notify all clients about winner
+            for (let client of wss.clients) {
+              client.send(finish(data.indexPlayer));
+              client.send(updateWinners(winners));
+            }
+          }
+          // Clean up game
+          delete games[data.gameId];
+          delete turns[data.gameId];
+          return;
+        }
+
+        // broadcast whose turn it is
         for (let client of wss.clients) {
           client.send(turn(turns[data.gameId]));
         }
