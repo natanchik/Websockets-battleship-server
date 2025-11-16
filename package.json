@@ -5,8 +5,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "tsc && node index.js",
-    "start:dev": "tsc && nodemon ./index.js"
+    "build": "tsc",
+    "start": "npm run build && node dist/index.js",
+    "start:dev": "tsc -w & nodemon dist/index.js"
   },
   "author": "Andrei Auchynnikau",
   "keywords": [],
