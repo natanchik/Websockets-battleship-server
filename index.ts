@@ -1,7 +1,17 @@
 import { httpServer } from './src/http_server/index.js';
 import { WebSocketServer } from 'ws';
 import createMatrix from './src/wss/createMatrix.js';
-import { reg, updateWinners, updateRoom, createGame, startGame, attack, turn, finish } from './src/wss/responses.js';
+import {
+  reg,
+  updateWinners,
+  updateRoom,
+  createGame,
+  startGame,
+  attack,
+  turn,
+  finish,
+  randomAttack,
+} from './src/wss/responses.js';
 import takeTurn from './src/wss/takeTurn.js';
 import { prepareBotForGame, botMakeMove, generateBotShips } from './src/wss/bot.js';
 import { User, Room, GamePlayer, Winner, Message, Ship } from './src/types.js';
@@ -306,6 +316,106 @@ wss.on('connection', function connection(ws) {
           }
         } catch (e) {
           console.error('Error while trying to trigger bot move after attack', e);
+        }
+        break;
+      }
+
+      case 'randomAttack': {
+        // Verify game and player still exist
+        if (!games[data.gameId] || !games[data.gameId][data.indexPlayer]) {
+          console.error('Game or player not found for random attack');
+          break;
+        }
+
+        // Generate random coordinates
+        const x = Math.floor(Math.random() * 10);
+        const y = Math.floor(Math.random() * 10);
+
+        // Check if game exists and it's the player's turn
+        if (!games[data.gameId] || turns[data.gameId] !== data.indexPlayer) {
+          console.error("Invalid random attack: game not found or not player's turn");
+          break;
+        }
+
+        const enemyIndex = Object.keys(games[data.gameId]).filter((el) => el != data.indexPlayer)[0];
+        const status = takeTurn(games[data.gameId][enemyIndex].matrix, x, y);
+
+        // Change turn only on miss
+        if (status === 'miss') {
+          turns[data.gameId] = +enemyIndex;
+        }
+
+        // Increment killed ships counter when ship is killed
+        if (status === 'killed') {
+          games[data.gameId][enemyIndex].shipsKilled++;
+        }
+
+        // Broadcast the attack to all clients
+        for (let client of wss.clients) {
+          client.send(attack({ x, y }, data.indexPlayer, status));
+        }
+
+        // Check if game is finished (enemy has all ships killed)
+        if (games[data.gameId][enemyIndex].shipsKilled === games[data.gameId][enemyIndex].shipsAmount) {
+          // Current player wins - find player name from users
+          let winnerName = '';
+          for (const [userName, userInfo] of Object.entries(users)) {
+            if (userInfo.index === data.indexPlayer) {
+              winnerName = userName;
+              break;
+            }
+          }
+
+          if (winnerName) {
+            // Find or create winner entry
+            const existingWinner = winners.find((w) => w.name === winnerName);
+            if (existingWinner) {
+              existingWinner.wins++;
+            } else {
+              winners.push({ name: winnerName, wins: 1 });
+            }
+            // Notify all clients about winner
+            for (let client of wss.clients) {
+              client.send(finish(data.indexPlayer));
+              client.send(updateWinners(winners));
+            }
+          }
+          // Clean up game
+          delete games[data.gameId];
+          delete turns[data.gameId];
+          break;
+        }
+
+        // Broadcast whose turn it is
+        for (let client of wss.clients) {
+          client.send(turn(turns[data.gameId]));
+        }
+
+        // If the next turn belongs to a bot, trigger the bot move
+        try {
+          const roomRec = rooms.find((r) => r.roomId === data.gameId);
+          if (roomRec) {
+            const botUser = roomRec.roomUsers.find((u) => u.name === 'Bot');
+            if (botUser) {
+              const botIndex = botUser.index;
+              if (turns[data.gameId] === botIndex) {
+                setTimeout(
+                  () =>
+                    botMakeMove(
+                      data.gameId,
+                      botIndex,
+                      games,
+                      wss,
+                      { attack, turn, startGame, createGame, updateRoom, updateWinners, reg, finish },
+                      turns,
+                    ),
+                  200,
+                );
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error while trying to trigger bot move after random attack', e);
         }
         break;
       }

@@ -82,3 +82,14 @@ export const finish = (winPlayer: number) => {
     id: 0,
   });
 };
+
+export const randomAttack = (gameId: number | string, indexPlayer: number | string) => {
+  return JSON.stringify({
+    type: 'randomAttack',
+    data: JSON.stringify({
+      gameId,
+      indexPlayer,
+    }),
+    id: 0,
+  });
+};
