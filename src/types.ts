@@ -45,6 +45,7 @@ export interface Winner {
 type MessageType =
   | 'reg'
   | 'create_room'
+  | 'single_play'
   | 'add_user_to_room'
   | 'add_ships'
   | 'update_room'
